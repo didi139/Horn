@@ -1,9 +1,5 @@
 import horn
 
-# e1 = horn.Expression('<-f(c,*d)^g(c,*d)')
-# e2 = horn.Expression('f(*a, b)<-k(e,f)')
-# print(e1.mix(e2))
-
 engine = horn.Engine([
     'lucky(john)<-',
     '<-study(john)',
@@ -13,7 +9,10 @@ engine = horn.Engine([
     'win(*U,lottery)<-lucky(*U)'
 ])
 
-res = engine.proof('<-happy(john)')
+process = engine.proof('<-happy(john)')
+regular_max_len = max([len(str(each[0])) for each in process])
+result_max_len = max([len(str(each[1])) for each in process])
+
 print('证明：<-happy(john)')
-for each in res:
-    print('结合：', str(each[0]).center(30), '，生成：', str(each[1]).center(30))
+for reg, res in process:
+    print('结合：', str(reg).center(regular_max_len), '，生成：', str(res).center(regular_max_len))

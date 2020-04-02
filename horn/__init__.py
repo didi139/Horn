@@ -14,7 +14,7 @@ class Unit:
     _arg_pattern = compile(r'^\*?\w+$')
 
     @classmethod
-    def _is_global_arg(cls, arg: str) -> bool:
+    def is_global_arg(cls, arg: str) -> bool:
         return arg.startswith('*')
 
     def __init__(self, unit: str):
@@ -51,8 +51,8 @@ class Unit:
         self_map = {}
         other_map = {}
         for s, o in zip(self.args, other.args):
-            s_is_global = Unit._is_global_arg(s)
-            o_is_global = Unit._is_global_arg(o)
+            s_is_global = Unit.is_global_arg(s)
+            o_is_global = Unit.is_global_arg(o)
             if s_is_global:
                 # self_map中可能存在一个全体映射到多个个体的可能，用集合收集起来
                 self_map[s] = self_map.get(s, set())
@@ -123,10 +123,11 @@ class Expression:
             if self.body.index(v) != i:
                 self.body.pop(i)
 
-    def mix(self, other):
+    def mix(self, other, limit=None):
         """
         self和other的消解结果
 
+        :param limit:
         :type other: Expression
         """
         if not isinstance(other, Expression):
@@ -135,11 +136,17 @@ class Expression:
         if self.head or not other.head:
             return None
 
-        for i, v in enumerate(self.body):
-            res = v.mapping_args(other.head)
+        if limit is None:
+            limit = self.body
+
+        for i, v in enumerate(limit):
+            # 因为是self要融入other，所以让other.head映射到v
+            # 其实谁映射到谁是随意的，这样做只是为了和课程中的推导过程一致
+            # https://moodle.scnu.edu.cn/pluginfile.php/510290/mod_resource/content/1/3_%E7%9F%A5%E8%AF%86%E6%8E%A8%E7%90%86%E4%B8%8E%E4%B8%93%E5%AE%B6%E7%B3%BB%E7%BB%9F.pdf
+            res = other.head.mapping_args(v)
             if not res:
                 continue
-            self_map, other_map = res
+            other_map, self_map = res
             if not self_map:
                 self_copy = Expression('<-')
                 self_copy.body = self.body[:]
@@ -172,15 +179,10 @@ class Expression:
 
 class Engine:
     def __init__(self, lib):
-        self.lib = []
-        self.terminate = []
-        for each in lib:
-            exp = Expression(each)
-            if not exp.head:
-                # 无头子句，是递归中止的条件
-                self.terminate.append(exp)
-            else:
-                self.lib.append(exp)
+        """
+        :type lib: list[str]
+        """
+        self.lib = [Expression(each) for each in lib]
 
     def _proof(self, exp: Expression):
         if exp.head:
@@ -189,34 +191,17 @@ class Engine:
         if not exp.body:
             return []
 
-        # 如果有任意的待证目标位于terminate中，则应该中止，返回None
-        # for cond in self.terminate:
-        #     names = {each.name for each in exp.body}
-        #     lic = sorted([each for each in cond.body if each.name in names], key=lambda t: str(t))
-        #     lie = sorted(exp.body[:], key='')
-        #
-        #     if len(li) == len(exp.body):
-        #         for e in exp.body:
-        #             for l in li:
-        #                 if e >= l:
-        #                     established = False
-        #     established = True  # 任意在exp中的变量是否都在cond中
-        #     for unit in exp.body:
-        #         if unit.
-        #     while established:
-        #
-        #     {str(each): each for each in exp}.values()
-        #     for s, o in zip(exp.body, cond.body):
-        #         pass
-
-        for i, each in enumerate(self.lib):
-            i += 1
-            res = exp.mix(each)
-            if res:
-                ret = self._proof(res)
-                if ret is not None:
-                    ret.insert(0, (each, res))
-                    return ret
+        for limit in exp.body:
+            for each in self.lib:
+                # limit限制了exp.mix的行为，如果不加入limit，那么
+                # exp.mix对于each，会尽可能进行匹配，而书本中，
+                # 采取的行为是尽可能的先匹配exp.body中靠前的规则
+                res = exp.mix(each, [limit])
+                if res:
+                    ret = self._proof(res)
+                    if ret is not None:
+                        ret.insert(0, (each, res))
+                        return ret
 
         return
 
@@ -225,7 +210,7 @@ class Engine:
         返回消解过程，如果无法消解，则返回None
         """
         exp = Expression(exp)
-        # self.terminate.append(exp)
+        self.lib.append(exp)
         ret = self._proof(exp)
-        # self.terminate.pop()
+        self.lib.pop()
         return ret
