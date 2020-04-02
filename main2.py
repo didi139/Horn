@@ -19,11 +19,9 @@ engine = horn.Engine([
     '女性(*X)<-母亲(*X,*Y)',
     '亲子(*X,*Y)<-母亲(*X,*Y)'
 ])
-res = engine.proof('<-表兄妹(贾宝玉,林黛玉)')
-print('证明：<-表兄妹(贾宝玉,林黛玉)')
-for each in res:
-    print('结合：', str(each[0]).center(30), '，生成：', str(each[1]).center(30))
+process = engine.proof('<-表兄妹(贾宝玉,林黛玉)')
 
-end = datetime.datetime.now()
-print('开始于：', start, sep='')
-print('结束于：', end, sep='')
+print('证明： <-表兄妹(贾宝玉,林黛玉)')
+for reg, res in process:
+    print('结合：', str(reg))
+    print('生成：', str(res))

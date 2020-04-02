@@ -191,19 +191,17 @@ class Engine:
         if not exp.body:
             return []
 
-        for limit in exp.body:
-            for each in self.lib:
-                # limit限制了exp.mix的行为，如果不加入limit，那么
-                # exp.mix对于each，会尽可能进行匹配，而书本中，
-                # 采取的行为是尽可能的先匹配exp.body中靠前的规则
-                res = exp.mix(each, [limit])
-                if res:
-                    ret = self._proof(res)
-                    if ret is not None:
-                        ret.insert(0, (each, res))
-                        return ret
+        for each in self.lib:
+            # 如果这一条证明路径是可行的，那么关于exp.body[0]总会有一条规则可以消除它
+            # 如果无法消除，那么直接返回
+            res = exp.mix(each, [exp.body[0]])
+            if res:
+                ret = self._proof(res)
+                if ret is not None:
+                    ret.insert(0, (each, res))
+                    return ret
 
-        return
+        return None
 
     def proof(self, exp: str):
         """
