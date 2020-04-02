@@ -1,5 +1,9 @@
 import horn
 
+# e1 = horn.Expression('<-f(c,*d)^g(c,*d)')
+# e2 = horn.Expression('f(*a, b)<-k(e,f)')
+# print(e1.mix(e2))
+
 engine = horn.Engine([
     'lucky(john)<-',
     '<-study(john)',

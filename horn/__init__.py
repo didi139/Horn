@@ -33,7 +33,7 @@ class Unit:
         for i in range(len(self.args)):
             self.args[i] = mapping.get(self.args[i], self.args[i])
 
-    def mapping_args0(self, other):
+    def mapping_args(self, other):
         """
         self和other合并，分别需要修改什么变量，其中如果变量皆为全体那么名字以other的为主
         如果self中一个全体变量对应other中的多个全体变量，那么other中需要将其统一
@@ -79,41 +79,6 @@ class Unit:
 
         return self_map, other_map
 
-    def mapping_args(self, other):
-        """
-        返回self映射至other需要修改的变量，如果可以映射结果是一个字典，否则为None
-        eg: f(*a, *b) mapping_args f(c, d)  返回：{'*a':'c', '*b':'d'}
-            f(a, b) mapping_args f(*c, *d)  返回：None
-        :type other: Unit
-        """
-        if not isinstance(other, Unit):
-            return None
-        if self.name != other.name:
-            return None
-        if len(self.args) != len(other.args):
-            return None
-
-        # 对应的个体变量应该相等
-        for each in zip(self.args, other.args):
-            if not Unit._is_global_arg(each[0]):
-                if each[0] != each[1]:
-                    return None
-
-        # 建立self表达式的各个全体变量的映射
-        li = [each for each in zip(self.args, other.args) if Unit._is_global_arg(each[0])]
-        di = dict(li)
-        # 可能存在如下情况：
-        # f(*a, *a) mapping_args f(b, c)
-        # 该情况是映射失败的情况，因为映射后*a不可能既是b又是c
-        # 此时 li = [('*a', 'b'), ('*a', 'c')], di = {'*a': 'c'}
-        # 所以，判断li中的所有映射是否仍然在di中即可
-        items = di.items()
-        for each in li:
-            if each not in items:
-                return None
-
-        return di
-
     def __eq__(self, other):
         """
         :type other: Expression
@@ -121,19 +86,6 @@ class Unit:
         if not isinstance(other, Unit):
             return False
         return str(self) == str(other)
-
-    def __le__(self, other):
-        """
-        判断self是否含于other
-        eg: fun( a, *b) <= fun(*c, *d)      True
-            fun( a, *b) <= fun( c, *d)      False
-            fun( a, *b) <= fun(*c,  d)      False
-            fun( a,  b) <= fun(*c, *c)      False
-            fun( a,  b) <= fun( a,  b)      True
-        """
-        if not isinstance(other, Unit):
-            return False
-        return other.mapping_args(self) is not None
 
     def __str__(self):
         return self.name + '(' + ','.join(self.args) + ')'
@@ -144,10 +96,10 @@ class Expression:
     表达式在推理机中组成库，其遵循一下原则：
     1) Unit<-Unit1^Unit2^.^UnitN，其中Unit的规则请转到Unit文档查看详情
     """
-    __pattern = compile(r'^(.*)<-(.*)$')
+    _pattern = compile(r'^(.*)<-(.*)$')
 
     def __init__(self, expression: str):
-        res = Expression.__pattern.match(expression)
+        res = Expression._pattern.match(expression)
 
         self.head = None if res.group(1).strip() == '' else Unit(res.group(1))
 
@@ -166,17 +118,15 @@ class Expression:
         for i in range(self.body.count(unit)):
             self.body.remove(unit)
 
+    def clear_same_unit(self):
+        for i, v in enumerate(self.body):
+            if self.body.index(v) != i:
+                self.body.pop(i)
+
     def mix(self, other):
         """
-        self和other关于的消解结果，有以下两种情况
-        eg: 1) self = <-f(a)^g(b)
-               other = f(*c)<-k(*c,d)
-               self mix other = <-k(a,d)^g(b)
-               这种情况为假设<-f(a)，则<-k(a,d)^g(b)
-            2) self = <-f(*a)^g(*a,b)
-               other = f(c)<-
-               self mix other = <-g(c,b)
-               这种情况为other为真事实，缩小self中*a的范围，也是一种假设
+        self和other的消解结果
+
         :type other: Expression
         """
         if not isinstance(other, Expression):
@@ -185,27 +135,33 @@ class Expression:
         if self.head or not other.head:
             return None
 
-        # 情况1
-        for each in self.body:
-            mapping = other.head.mapping_args(each)
-            if mapping is not None:
-                # 该位置可进行映射
-                copy = deepcopy(other)
-                copy.head = None
-                copy.update_args(mapping)
-                copy.body.extend([each for each in self.body if each not in copy.body])
-                copy.remove_all_from_body(each)
-                return copy
+        for i, v in enumerate(self.body):
+            res = v.mapping_args(other.head)
+            if not res:
+                continue
+            self_map, other_map = res
+            if not self_map:
+                self_copy = Expression('<-')
+                self_copy.body = self.body[:]
+                to_remove = v
+            else:
+                self_copy = deepcopy(self)
+                self_copy.update_args(self_map)
+                to_remove = deepcopy(v)
+                to_remove.update_args(self_map)
 
-        # 情况2
-        if not other.body:
-            for each in self.body:
-                mapping = each.mapping_args(other.head)
-                if mapping:
-                    copy = deepcopy(self)
-                    copy.remove_all_from_body(each)
-                    copy.update_args(mapping)
-                    return copy
+            if not other_map:
+                other_copy = Expression('<-')
+                other_copy.body = other.body[:]
+            else:
+                other_copy = deepcopy(other)
+                other_copy.head = None
+                other_copy.update_args(other_map)
+
+            other_copy.body.extend(self_copy.body)
+            other_copy.remove_all_from_body(to_remove)
+            other_copy.clear_same_unit()
+            return other_copy
 
         return None
 
