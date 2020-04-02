@@ -11,7 +11,5 @@ engine = horn.Engine([
 
 res = engine.proof('<-happy(john)')
 print('证明：<-happy(john)')
-# [each[0] for each in res]
-# [each[1] for each in res]
 for each in res:
     print('结合：', str(each[0]).center(30), '，生成：', str(each[1]).center(30))
